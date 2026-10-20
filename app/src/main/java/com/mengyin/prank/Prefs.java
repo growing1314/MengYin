@@ -37,6 +37,33 @@ public final class Prefs {
         sp(c).edit().putBoolean("boost", b).apply();
     }
 
+    /** 语音包排序方式：new / used / name。 */
+    public static String sort(Context c) {
+        return sp(c).getString("sort", ClipStore.SORT_NEW);
+    }
+
+    public static void setSort(Context c, String s) {
+        sp(c).edit().putString("sort", s).apply();
+    }
+
+    /** 悬浮窗里的筛选：全部 / 收藏 / 某个分类。 */
+    public static String floatFilter(Context c) {
+        return sp(c).getString("floatFilter", ClipStore.FILTER_ALL);
+    }
+
+    public static void setFloatFilter(Context c, String f) {
+        sp(c).edit().putString("floatFilter", f).apply();
+    }
+
+    /** 上一次导入时选的分类，下次默认选它。 */
+    public static String lastCategory(Context c) {
+        return sp(c).getString("lastCategory", "");
+    }
+
+    public static void setLastCategory(Context c, String s) {
+        sp(c).edit().putString("lastCategory", s).apply();
+    }
+
     public static boolean seeded(Context c) {
         return sp(c).getBoolean("seeded", false);
     }

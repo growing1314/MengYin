@@ -25,6 +25,7 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -48,6 +49,7 @@ public class FloatingService extends Service {
     private TextView presetBtn;
     private TextView delayBtn;
     private TextView boostBtn;
+    private TextView filterBtn;
 
     private final Handler h = new Handler(Looper.getMainLooper());
     private final Runnable storeListener = this::refreshList;
@@ -174,6 +176,17 @@ public class FloatingService extends Service {
         LinearLayout.LayoutParams r2 = Ui.matchWrap(this, 6);
         panel.addView(row2, r2);
 
+        // 显示哪些语音：全部 → 收藏 → 各个分类，点一下切换
+        filterBtn = smallBtn("");
+        filterBtn.setBackground(Ui.round(this, Ui.PINK, 12));
+        filterBtn.setTextColor(0xFFFFFFFF);
+        filterBtn.setOnClickListener(v -> {
+            Prefs.setFloatFilter(this, nextFilter(Prefs.floatFilter(this)));
+            updateButtons();
+            refreshList();
+        });
+        panel.addView(filterBtn, Ui.matchWrap(this, 6));
+
         TextView tip = Ui.text(this, "点一条 → 去按住微信说话 → 震动后松手", 11, Ui.SUB, false);
         tip.setPadding(dp(2), dp(8), dp(2), dp(4));
         panel.addView(tip);
@@ -222,19 +235,56 @@ public class FloatingService extends Service {
         int d = Prefs.delaySeconds(this);
         delayBtn.setText(d == 0 ? "立即播放" : "延迟 " + d + " 秒");
         boostBtn.setText(Prefs.boost(this) ? "音量加强：开" : "音量加强：关");
+        String f = currentFilter();
+        String label = ClipStore.FILTER_ALL.equals(f) ? "全部"
+                : ClipStore.FILTER_FAV.equals(f) ? "★ 收藏" : f;
+        filterBtn.setText("显示：" + label + "（点击切换）");
+    }
+
+    /** 当前筛选；如果那个分类已经没有了，就回到“全部”。 */
+    private String currentFilter() {
+        String f = Prefs.floatFilter(this);
+        if (ClipStore.FILTER_ALL.equals(f) || ClipStore.FILTER_FAV.equals(f)) return f;
+        if (ClipStore.get(this).countIn(f) == 0) {
+            Prefs.setFloatFilter(this, ClipStore.FILTER_ALL);
+            return ClipStore.FILTER_ALL;
+        }
+        return f;
+    }
+
+    private String nextFilter(String cur) {
+        List<String> order = new ArrayList<>();
+        order.add(ClipStore.FILTER_ALL);
+        order.add(ClipStore.FILTER_FAV);
+        order.addAll(ClipStore.get(this).categories());
+        int i = order.indexOf(cur);
+        return order.get((i + 1) % order.size());
     }
 
     private void refreshList() {
         if (list == null) return;
         list.removeAllViews();
-        List<ClipStore.Clip> clips = ClipStore.get(this).all();
+        ClipStore store = ClipStore.get(this);
+        String f = currentFilter();
+        // 常用的排前面，收藏的再往前提
+        List<ClipStore.Clip> clips = store.query(f, "", ClipStore.SORT_USED);
+        if (!ClipStore.FILTER_FAV.equals(f)) {
+            List<ClipStore.Clip> favs = new ArrayList<>();
+            List<ClipStore.Clip> rest = new ArrayList<>();
+            for (ClipStore.Clip c : clips) (c.favorite ? favs : rest).add(c);
+            favs.addAll(rest);
+            clips = favs;
+        }
         if (clips.isEmpty()) {
-            TextView e = Ui.text(this, "还没有语音，打开 App 添加吧", 13, Ui.SUB, false);
+            String msg = store.isEmpty() ? "还没有语音，打开 App 添加吧"
+                    : ClipStore.FILTER_FAV.equals(f) ? "还没有收藏，在 App 里点☆收藏"
+                    : "这里没有语音";
+            TextView e = Ui.text(this, msg, 13, Ui.SUB, false);
             e.setPadding(dp(4), dp(10), dp(4), dp(10));
             list.addView(e);
         }
         for (final ClipStore.Clip c : clips) {
-            TextView t = Ui.text(this, c.name, 14, Ui.TEXT, false);
+            TextView t = Ui.text(this, (c.favorite ? "★ " : "") + c.name, 14, Ui.TEXT, false);
             t.setSingleLine(true);
             t.setEllipsize(TextUtils.TruncateAt.END);
             t.setPadding(dp(10), dp(10), dp(10), dp(10));
@@ -282,6 +332,7 @@ public class FloatingService extends Service {
 
     private void pick(ClipStore.Clip c) {
         panel.setVisibility(View.GONE);
+        ClipStore.get(this).markUsed(c);
         busy = true;
         final int delay = Prefs.delaySeconds(this);
         if (delay <= 0) {

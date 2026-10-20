@@ -10,15 +10,24 @@ android {
         applicationId 'com.mengyin.prank'
         minSdk 24
         targetSdk 34
-        versionCode 1
-        versionName '1.0'
+        versionCode 2
+        versionName '1.1'
+    }
+
+    // 固定签名：以后每次更新都能直接覆盖安装，语音包不会丢
+    signingConfigs {
+        fixed {
+            storeFile file('mengyin.keystore')
+            storePassword 'mengyin123'
+            keyAlias 'mengyin'
+            keyPassword 'mengyin123'
+        }
     }
 
     buildTypes {
         release {
             minifyEnabled false
-            // 用调试证书签名，方便自己直接安装
-            signingConfig signingConfigs.debug
+            signingConfig signingConfigs.fixed
         }
     }
 
